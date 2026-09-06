@@ -17,27 +17,21 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
-      - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v3
-
-      - name: Find and Build APK
+      - name: Auto-locate Gradle & Build APK
         run: |
-          # Agar android folder ke bajaye kahin aur gradle file hai toh us directory mein switch karenge
-          if [ -f "settings.gradle" ] || [ -f "settings.gradle.kts" ]; then
-            gradle wrapper
-            chmod +x gradlew
-            ./gradlew assembleDebug
-          elif [ -d "android" ]; then
-            cd android
-            if [ ! -f "gradlew" ]; then
-              gradle wrapper
-            fi
-            chmod +x gradlew
-            ./gradlew assembleDebug
-          else
-            echo "Gradle build files not found!"
+          # Automatically find where settings.gradle is located in the repo
+          GRADLE_DIR=$(find . -name "settings.gradle" -o -name "settings.gradle.kts" -exec dirname {} \; | head -n 1)
+          if [ -z "$GRADLE_DIR" ]; then
+            echo "Error: settings.gradle not found anywhere in repository!"
             exit 1
+          echo "Found project directory at: $GRADLE_DIR"
+          cd "$GRADLE_DIR"
+          
+          if [ ! -f "gradlew" ]; then
+            gradle wrapper
           fi
+          chmod +x gradlew
+          ./gradlew assembleDebug
 
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
