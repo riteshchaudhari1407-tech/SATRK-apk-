@@ -17,9 +17,16 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
-      - name: Build APK with Gradle
+      - name: Setup Gradle Environment
+        uses: gradle/actions/setup-gradle@v3
+
+      - name: Generate Gradle Wrapper & Build APK
         run: |
           cd android
+          # Agar gradlew file nahi hai toh GitHub Action khud wrapper bana lega
+          if [ ! -f "gradlew" ]; then
+            gradle wrapper --gradle-version 8.0
+          fi
           chmod +x gradlew
           ./gradlew assembleDebug
 
