@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import {
     FiAlertCircle,
     FiArrowLeft,
@@ -7,7 +7,6 @@ import {
     FiMail,
     FiPhone,
     FiShield,
-    FiUser,
 } from 'react-icons/fi';
 
 import { supabase } from '../supabase';

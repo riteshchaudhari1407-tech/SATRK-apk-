@@ -84,6 +84,11 @@ THREAT_CATEGORIES: List[ThreatCategoryDef] = [
             _p(r"police station"),
             _p(r"sub[-\s]?inspector"),
             _p(r"\bdcp\b"),
+            _p(r"warrant"),
+
+
+
+            _p(r"case file"),
         ],
     ),
     ThreatCategoryDef(
@@ -115,6 +120,14 @@ THREAT_CATEGORIES: List[ThreatCategoryDef] = [
             _p(r"kisi ko mat batana"),
             _p(r"giraftar"),
             _p(r"cannot contact anyone"),
+            _p(r"डिजिटल अरेस्ट"),
+            _p(r"वारंट"),
+            _p(r"गिरफ्तारी"),
+            _p(r"अटक वॉरंट"),
+
+
+
+            _p(r"गुन्हा दाखल"),
         ],
     ),
     ThreatCategoryDef(
@@ -216,6 +229,12 @@ class RuleEngineService:
             ]
 
             if not matches:
+
+
+
+
+
+
                 continue
 
             # First match already carries most of the category's weight
@@ -266,4 +285,12 @@ class RuleEngineService:
             combo_bonus=combo_bonus,
             linguistic_bonus=linguistic_bonus,
             distinct_categories=distinct_categories,
+
+
+
+
+
+
+
+
         )

@@ -15,6 +15,9 @@ from app.services.groq_service import GroqService
 from app.services.health_service import HealthService
 from app.services.ocr_service import OCRService
 from app.services.semantic_service import SemanticService
+from app.services.stt_service import STTService
+from app.services.rule_engine_service import RuleEngineService
+from app.services.call_monitoring_service import CallMonitoringService
 
 logger = logging.getLogger("satrk.container")
 
@@ -25,6 +28,14 @@ logger.info("Initializing Satrk services...")
 groq_service = GroqService(settings)
 semantic_service = SemanticService()
 ocr_service = OCRService()
+rule_engine_service = RuleEngineService()
+stt_service = STTService()
+
+call_monitoring_service = CallMonitoringService(
+    stt_service=stt_service,
+    rule_engine=rule_engine_service,
+    groq_service=groq_service,
+)
 
 analysis_service = AnalysisService(
     groq_service=groq_service,
@@ -40,8 +51,9 @@ health_service = HealthService(
 )
 
 logger.info(
-    "Services ready — groq_configured=%s semantic_available=%s ocr_available=%s",
+    "Services ready — groq_configured=%s semantic_available=%s ocr_available=%s stt_ready=%s",
     groq_service.configured,
     semantic_service.available,
     ocr_service.available,
+    stt_service.client is not None,
 )

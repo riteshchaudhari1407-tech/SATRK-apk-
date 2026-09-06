@@ -9,7 +9,6 @@ service retries a bounded number of times, then raises
 GroqServiceError so the caller can honestly report that the LLM layer
 was unavailable for this request (never fabricate a result).
 """
-
 import json
 import logging
 import time
@@ -33,10 +32,13 @@ Your primary objective is to analyze raw text or OCR-extracted message content w
 - If the message is a genuine, legitimate bank transaction alert (e.g., standard credit/debit notification from a bank like SBI, HDFC with account numbers and reference IDs), a utility bill, a standard OTP without any threat, or ordinary casual chat, you MUST set "is_scam": false and assign a LOW "risk_score" (under 15). Never falsely flag legitimate transactional messages as scams.
 
 ### Analysis Dimensions to Evaluate:
-1. Impersonation Tactics: Claims of identity by law enforcement or regulatory bodies (e.g., CBI, Supreme Court, Cyber Cell, RBI, ED, Custom Department, TRAI, Narcotics Bureau). Note: Real Indian agencies never conduct legal proceedings, arrests, or settlements over WhatsApp, SMS, or video calls.
-2. Psychological Coercion & Pressure: Manufactured urgency, countdown timers, threats of immediate non-bailable warrants, police custody, or asset seizure.
+1. Impersonation Tactics: Claims of identity by law enforcement or regulatory bodies (e.g., CBI, Supreme Court, Cyber Cell, RBI, ED, Custom Department, TRAI, Narcotics Bureau, Police). Note: Real Indian agencies never conduct legal proceedings, arrests, or settlements over WhatsApp, SMS, or video calls.
+2. Psychological Coercion & Pressure: Manufactured urgency, countdown timers, threats of immediate non-bailable warrants, case files, police custody, or asset seizure.
 3. Isolation & Secrecy Tactics: Instructions to stay on a continuous video call, cut off communication with family, or treat the situation as top-secret state security.
 4. Financial Extortion & Phishing: Demands for OTP, UPI PIN, "refundable verification deposits," transfers to "safe accounts," or remote-access application installs (AnyDesk, TeamViewer).
+
+### Multilingual Instruction:
+- Hindi/Marathi mein aaye toh translate kiye bina samajh ke analyze karo. Analyze multilingual text directly with full comprehension.
 
 ### Strict Output Format Requirement:
 You must respond with ONLY a single valid JSON object. Do not include markdown code fences, introductory text, or commentary. The JSON must match this exact schema:
@@ -67,16 +69,16 @@ You must respond with ONLY a single valid JSON object. Do not include markdown c
 - 30–54 (MEDIUM): Suspicious external links, unverified security alerts, or mild pressure without direct legal threats.
 - 0–29 (LOW): Benign daily communication, casual chat, meeting reminders, or legitimate transactional notifications. Do not inflate scores for safe text."""
 
+
 class GroqService:
     def __init__(self, settings: Settings):
         self.settings = settings
         self.model = "openai/gpt-oss-120b"
         self._client = None
 
-        # Direct os.getenv se key utha lo taaki .env ka lafda hi khatam ho jaye
         import os
         from dotenv import load_dotenv
-        load_dotenv()  # .env file ko forcefully load karega
+        load_dotenv()
 
         api_key = os.getenv("GROQ_API_KEY")
 

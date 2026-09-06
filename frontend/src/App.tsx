@@ -24,6 +24,8 @@ import {
     FiUploadCloud,
     FiUser,
     FiX,
+    FiPhoneCall,
+    FiMic,
 } from 'react-icons/fi';
 
 import {
@@ -45,6 +47,8 @@ import {
     scanImageMessage,
 } from './services/api';
 
+import { LiveCallMonitor } from './components/LiveCallMonitor';
+
 /* =========================================================
    TYPES
 ========================================================= */
@@ -52,6 +56,7 @@ import {
 type Tab =
     | 'overview'
     | 'scanner'
+    | 'livecall'
     | 'incidents'
     | 'intel'
     | 'settings';
@@ -1600,6 +1605,12 @@ export default function App() {
         },
 
         {
+            id: 'livecall' as Tab,
+            label: 'Live Call Shield',
+            icon: FiPhoneCall,
+        },
+
+        {
             id: 'incidents' as Tab,
             label: 'Incidents',
             icon: FiAlertTriangle,
@@ -2504,6 +2515,17 @@ export default function App() {
 
                                 </section>
 
+                            </div>
+                        )}
+
+                    {/* =================================================
+              LIVE CALL SHIELD
+          ================================================= */}
+
+                    {activeTab ===
+                        'livecall' && (
+                            <div className="mx-auto max-w-[1300px] p-5 md:p-8">
+                                <LiveCallMonitor />
                             </div>
                         )}
 

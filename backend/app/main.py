@@ -17,7 +17,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.container import settings
-from app.routers import analysis, health, scans
+from app.routers import analysis, calls, health, scans
 
 logging.basicConfig(
     level=logging.INFO,
@@ -48,6 +48,7 @@ app.add_middleware(
 app.include_router(health.router, tags=["health"])
 app.include_router(analysis.router, tags=["analysis"])
 app.include_router(scans.router, tags=["scans"])
+app.include_router(calls.router)
 
 
 @app.get("/")
