@@ -17,19 +17,9 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
-      - name: Auto-locate Gradle & Build APK
+      - name: Build APK with Gradle
         run: |
-          GRADLE_DIR=$(find . -name "settings.gradle" -o -name "settings.gradle.kts" -exec dirname {} \; | head -n 1)
-          if [ -z "$GRADLE_DIR" ]; then
-            echo "Error: settings.gradle not found anywhere in repository!"
-            exit 1
-          fi
-          echo "Found project directory at: $GRADLE_DIR"
-          cd "$GRADLE_DIR"
-          
-          if [ ! -f "gradlew" ]; then
-            gradle wrapper
-          fi
+          cd android
           chmod +x gradlew
           ./gradlew assembleDebug
 
@@ -37,4 +27,4 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: app-debug
-          path: '**/build/outputs/apk/debug/*.apk'
+          path: android/app/build/outputs/apk/debug/app-debug.apk
