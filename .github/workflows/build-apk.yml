@@ -19,11 +19,11 @@ jobs:
 
       - name: Auto-locate Gradle & Build APK
         run: |
-          # Automatically find where settings.gradle is located in the repo
           GRADLE_DIR=$(find . -name "settings.gradle" -o -name "settings.gradle.kts" -exec dirname {} \; | head -n 1)
           if [ -z "$GRADLE_DIR" ]; then
             echo "Error: settings.gradle not found anywhere in repository!"
             exit 1
+          fi
           echo "Found project directory at: $GRADLE_DIR"
           cd "$GRADLE_DIR"
           
