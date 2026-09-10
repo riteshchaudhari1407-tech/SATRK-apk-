@@ -344,7 +344,7 @@ export const UnifiedCallProtection: React.FC = () => {
         setErrorMsg(null);
     };
 
-    // ── 4. Feedback & Link Scanner Handlers ──
+    // ── 4. Feedback Handler ──
     const handleFeedbackSubmit = async (wasCorrect: boolean) => {
         try {
             setFeedbackState('submitting');
@@ -356,27 +356,6 @@ export const UnifiedCallProtection: React.FC = () => {
         } catch (err) {
             console.error('Feedback submit error:', err);
             setFeedbackState('submitted');
-        }
-    };
-
-    const handleScanLink = async (e?: React.FormEvent) => {
-        if (e) e.preventDefault();
-        if (!linkUrl || !linkUrl.trim()) return;
-
-        try {
-            setIsScanningLink(true);
-            setLinkError(null);
-            setLinkResult(null);
-            const res = await analyzeLink(linkUrl.trim());
-            if (res.success && res.data) {
-                setLinkResult(res.data);
-            } else {
-                setLinkError(res.error || 'Link scan failed');
-            }
-        } catch (err: any) {
-            setLinkError(err.message || 'Error executing link analysis');
-        } finally {
-            setIsScanningLink(false);
         }
     };
 
