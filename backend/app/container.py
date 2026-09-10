@@ -18,6 +18,7 @@ from app.services.semantic_service import SemanticService
 from app.services.stt_service import STTService
 from app.services.rule_engine_service import RuleEngineService
 from app.services.call_monitoring_service import CallMonitoringService
+from app.services.voice_authenticity_service import VoiceAuthenticityService
 
 logger = logging.getLogger("satrk.container")
 
@@ -30,11 +31,13 @@ semantic_service = SemanticService()
 ocr_service = OCRService()
 rule_engine_service = RuleEngineService()
 stt_service = STTService()
+voice_authenticity_service = VoiceAuthenticityService(settings.RESEMBLE_API_KEY)
 
 call_monitoring_service = CallMonitoringService(
     stt_service=stt_service,
     rule_engine=rule_engine_service,
     groq_service=groq_service,
+    voice_auth_service=voice_authenticity_service,
 )
 
 analysis_service = AnalysisService(

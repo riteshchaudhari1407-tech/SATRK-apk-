@@ -9,7 +9,7 @@
     <TextView
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:text="Satark Cyber Threat Protection"
+        android:text="Satrk Cyber Threat Protection"
         android:textSize="20sp"
         android:textStyle="bold"
         android:layout_marginBottom="24dp" />
@@ -20,6 +20,16 @@
         android:layout_height="wrap_content"
         android:hint="Enter Backend Server IP (e.g. 10.57.107.249)"
         android:inputType="text"
+        android:layout_marginBottom="16dp" />
+
+    <TextView
+        android:id="@+id/tvStatus"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Status: Disconnected"
+        android:textSize="16sp"
+        android:textColor="#FF0000"
+        android:textStyle="bold"
         android:layout_marginBottom="16dp" />
 
     <Button

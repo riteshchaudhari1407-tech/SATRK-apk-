@@ -1,13 +1,43 @@
+import { getApiBaseUrl } from './api';
+
+export interface DetectedSignal {
+    signal: string;
+    severity: 'LOW' | 'MEDIUM' | 'HIGH';
+    evidence: string;
+}
+
+export interface VoiceAuthenticity {
+    is_likely_cloned?: boolean | null;
+    confidence?: number | null;
+}
+
 export interface CallAnalysisResult {
+    event?: 'phone_connected' | 'call_analysis' | 'phone_disconnected';
     call_id?: string;
     latest_chunk?: string;
-    transcript: string;
-    risk_score: number;
-    alert: boolean;
+    transcript?: string;
+    risk_score?: number;
+    verdict?: 'SAFE' | 'WARNING' | 'SCAM' | 'DANGER';
+    alert?: boolean;
+    explanation?: string;
+    scam_category?: string;
     hits?: string[];
+    detected_signals?: DetectedSignal[];
+    voice_authenticity?: VoiceAuthenticity;
+    connected_at?: string;
+    phone_status?: 'ACTIVE' | 'DISCONNECTED';
 }
 
 export type MessageCallback = (data: CallAnalysisResult) => void;
+
+export const getWsBaseUrl = (): string => {
+    const envWsUrl = import.meta.env?.VITE_WS_BASE_URL;
+    if (envWsUrl && typeof envWsUrl === 'string' && envWsUrl.trim() !== '') {
+        return envWsUrl.trim().replace(/\/$/, '');
+    }
+    const httpBaseUrl = getApiBaseUrl();
+    return httpBaseUrl.replace(/^http:/, 'ws:').replace(/^https:/, 'wss:');
+};
 
 export class CallSocketService {
     private socket: WebSocket | null = null;
@@ -20,7 +50,8 @@ export class CallSocketService {
         }
 
         this.onMessageCallback = onMessage;
-        const wsUrl = `ws://localhost:8000/calls/ws/${callId}`;
+        const wsBaseUrl = getWsBaseUrl();
+        const wsUrl = `${wsBaseUrl}/calls/ws/${callId}`;
         this.socket = new WebSocket(wsUrl);
 
         this.socket.onopen = () => {

@@ -26,6 +26,7 @@ import {
     FiX,
     FiPhoneCall,
     FiMic,
+    FiLink,
 } from 'react-icons/fi';
 
 import {
@@ -42,12 +43,10 @@ import jsPDF from 'jspdf';
 
 import { supabase } from './supabase';
 
-import {
-    scanTextMessage,
-    scanImageMessage,
-} from './services/api';
+import { scanTextMessage, scanImageMessage, getApiBaseUrl, analyzeLink } from './services/api';
+import type { LinkAnalysisResult } from './services/api';
 
-import { LiveCallMonitor } from './components/LiveCallMonitor';
+import { UnifiedCallProtection } from './components/UnifiedCallProtection';
 
 /* =========================================================
    TYPES
@@ -56,7 +55,7 @@ import { LiveCallMonitor } from './components/LiveCallMonitor';
 type Tab =
     | 'overview'
     | 'scanner'
-    | 'livecall'
+    | 'liveshield'
     | 'incidents'
     | 'intel'
     | 'settings';
@@ -849,6 +848,34 @@ export default function App() {
     const fileInputRef =
         useRef<HTMLInputElement>(null);
 
+    // ── Link Scanner State ──
+    const [linkUrl, setLinkUrl] = useState<string>('');
+    const [isScanningLink, setIsScanningLink] = useState<boolean>(false);
+    const [linkResult, setLinkResult] = useState<LinkAnalysisResult | null>(null);
+    const [linkError, setLinkError] = useState<string | null>(null);
+
+    const handleScanLink = async (e?: React.FormEvent) => {
+        if (e) e.preventDefault();
+        if (!linkUrl || !linkUrl.trim()) return;
+
+        try {
+            setIsScanningLink(true);
+            setLinkError(null);
+            setLinkResult(null);
+            const res = await analyzeLink(linkUrl.trim());
+            if (res.success && res.data) {
+                setLinkResult(res.data);
+            } else {
+                setLinkError(res.error || 'Link analysis failed');
+            }
+        } catch (err: any) {
+            console.error('Error in handleScanLink:', err);
+            setLinkError(err.message || 'Error executing link analysis');
+        } finally {
+            setIsScanningLink(false);
+        }
+    };
+
     /* =======================================================
        FETCH INCIDENTS
     ======================================================= */
@@ -858,7 +885,7 @@ export default function App() {
             try {
                 const response =
                     await fetch(
-                        'http://127.0.0.1:8000/api/v1/scans/recent'
+                        `${getApiBaseUrl()}/api/v1/scans/recent`
                     );
 
                 if (!response.ok) {
@@ -1388,7 +1415,7 @@ export default function App() {
             try {
                 const response =
                     await fetch(
-                        'http://localhost:8000/api/v1/i4c/report',
+                        `${getApiBaseUrl()}/api/v1/i4c/report`,
                         {
                             method: 'POST',
 
@@ -1578,6 +1605,9 @@ export default function App() {
             setError('');
             setI4cReported(false);
             setI4cTrackingId('');
+            setLinkUrl('');
+            setLinkResult(null);
+            setLinkError(null);
 
             if (
                 fileInputRef.current
@@ -1605,9 +1635,9 @@ export default function App() {
         },
 
         {
-            id: 'livecall' as Tab,
-            label: 'Live Call Shield',
-            icon: FiPhoneCall,
+            id: 'liveshield' as Tab,
+            label: 'Live Cyber Shield',
+            icon: FiShield,
         },
 
         {
@@ -2215,6 +2245,10 @@ export default function App() {
                                         'Threat Analysis Workspace'}
 
                                     {activeTab ===
+                                        'liveshield' &&
+                                        'Live Cyber Shield & Audio Inspector'}
+
+                                    {activeTab ===
                                         'incidents' &&
                                         'Incident Registry'}
 
@@ -2390,6 +2424,8 @@ export default function App() {
 
                                 </section>
 
+
+
                                 {/* CHART */}
 
                                 <section
@@ -2519,15 +2555,17 @@ export default function App() {
                         )}
 
                     {/* =================================================
-              LIVE CALL SHIELD
+              LIVE CYBER SHIELD
           ================================================= */}
 
                     {activeTab ===
-                        'livecall' && (
-                            <div className="mx-auto max-w-[1300px] p-5 md:p-8">
-                                <LiveCallMonitor />
+                        'liveshield' && (
+                            <div className="mx-auto max-w-[1500px] space-y-6 p-5 md:p-8">
+                                <UnifiedCallProtection />
                             </div>
                         )}
+
+
 
                     {/* =================================================
               SCANNER
@@ -2701,6 +2739,93 @@ export default function App() {
 
                                             </div>
                                         )}
+
+                                        {/* ── LINK SCANNER ── */}
+                                        <div className="mt-6 pt-6 border-t border-[#1d312d]">
+                                            <div className="flex items-center justify-between mb-4">
+                                                <div className="flex items-center gap-2">
+                                                    <FiLink className="text-lg text-emerald-400" />
+                                                    <h3 className={`text-sm font-bold tracking-wider uppercase ${title}`}>
+                                                        Link Scanner
+                                                    </h3>
+                                                </div>
+                                                <span className="text-[9px] font-mono text-emerald-400 bg-emerald-500/10 border border-emerald-500/30 px-2 py-0.5 rounded-full font-bold">
+                                                    🛡️ GOOGLE SAFE BROWSING V4
+                                                </span>
+                                            </div>
+
+                                            <form onSubmit={handleScanLink} className="space-y-3">
+                                                <div className="relative w-full">
+                                                    <FiLink className="absolute left-3.5 top-3.5 text-base text-[#82938e]" />
+                                                    <input
+                                                        type="url"
+                                                        value={linkUrl}
+                                                        onChange={(e) => setLinkUrl(e.target.value)}
+                                                        placeholder="Paste suspicious URL (e.g. https://customs-penalty-verify.org)..."
+                                                        className="w-full rounded-xl border border-emerald-500/20 bg-black/20 py-3 pl-10 pr-4 text-xs text-white placeholder-[#53645e] focus:border-emerald-400/50 focus:outline-none font-mono"
+                                                    />
+                                                </div>
+                                                <button
+                                                    type="submit"
+                                                    disabled={isScanningLink || !linkUrl.trim()}
+                                                    className="flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-400 py-3 text-xs font-black text-black uppercase tracking-wider transition hover:bg-emerald-300 disabled:opacity-50 shadow-lg shadow-emerald-500/20"
+                                                >
+                                                    {isScanningLink ? (
+                                                        <>
+                                                            <FiActivity className="text-base animate-spin" />
+                                                            SCANNING LINK...
+                                                        </>
+                                                    ) : (
+                                                        <>
+                                                            <FiShield className="text-base" />
+                                                            SCAN LINK FOR THREATS
+                                                        </>
+                                                    )}
+                                                </button>
+                                            </form>
+
+                                            {linkError && (
+                                                <div className="mt-4 rounded-xl border border-red-500/30 bg-red-500/10 p-3 text-xs text-red-300 flex items-center gap-3">
+                                                    <FiAlertCircle className="text-lg shrink-0 text-red-400" />
+                                                    <span>{linkError}</span>
+                                                </div>
+                                            )}
+
+                                            {linkResult && (
+                                                <div className={`mt-4 rounded-2xl border p-4 text-xs space-y-2 transition-all ${
+                                                    linkResult.is_safe
+                                                        ? 'border-emerald-500/40 bg-emerald-950/20 text-emerald-300'
+                                                        : 'border-red-500/50 bg-red-950/40 text-red-300 shadow-lg shadow-red-500/20'
+                                                }`}>
+                                                    <div className="flex items-center justify-between">
+                                                        <div className="flex items-center gap-2 font-mono font-bold">
+                                                            {linkResult.is_safe ? (
+                                                                <>
+                                                                    <FiCheckCircle className="text-lg text-emerald-400" />
+                                                                    <span className="text-emerald-400">LINK VERDICT: SAFE</span>
+                                                                </>
+                                                            ) : (
+                                                                <>
+                                                                    <FiAlertTriangle className="text-lg text-red-400 animate-bounce" />
+                                                                    <span className="text-red-400 uppercase tracking-wider">MALICIOUS / PHISHING LINK DETECTED</span>
+                                                                </>
+                                                            )}
+                                                        </div>
+                                                        <span className="font-mono text-[10px] text-[#82938e] truncate max-w-[150px]">{linkResult.url}</span>
+                                                    </div>
+                                                    <p className="text-xs leading-relaxed text-[#c0cfc9]">{linkResult.details}</p>
+                                                    {linkResult.threat_types && linkResult.threat_types.length > 0 && (
+                                                        <div className="flex flex-wrap gap-2 pt-1">
+                                                            {linkResult.threat_types.map((type, idx) => (
+                                                                <span key={idx} className="rounded-lg bg-red-500/20 border border-red-500/40 px-2.5 py-1 font-mono text-[10px] font-bold text-red-300">
+                                                                    🚨 {type}
+                                                                </span>
+                                                            ))}
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            )}
+                                        </div>
 
                                     </section>
 

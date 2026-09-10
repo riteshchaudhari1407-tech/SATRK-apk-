@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <style name="Theme.Satark" parent="Theme.MaterialComponents.DayNight.DarkActionBar">
+    <style name="Theme.Satrk" parent="Theme.MaterialComponents.DayNight.DarkActionBar">
         <item name="colorPrimary">#10b981</item>
         <item name="colorPrimaryVariant">#059669</item>
         <item name="colorOnPrimary">#000000</item>
