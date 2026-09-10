@@ -54,7 +54,7 @@ Rules:
 class GroqService:
     def __init__(self, settings: Settings):
         self.settings = settings
-        self.model = "llama-3.1-8b-instant"
+        self.model = "openai/gpt-oss-20b"
         self._client = None
 
         import os
