@@ -30,9 +30,9 @@ router = APIRouter()
 @router.post("/api/analyze", response_model=AnalysisResponse, operation_id="analyze_text_main")
 @router.post("/api/v1/scan-text", response_model=AnalysisResponse, operation_id="analyze_text_alias")
 @router.post("/api/v1/scan", response_model=AnalysisResponse, operation_id="analyze_text_legacy")
-def analyze_text(payload: AnalyzeTextRequest) -> AnalysisResponse:
+async def analyze_text(payload: AnalyzeTextRequest) -> AnalysisResponse:
     try:
-        res = analysis_service.analyze_text(payload.text)
+        res = await analysis_service.analyze_text(payload.text)
         if res.success and res.risk_score is not None:
             record_scan(
                 message=payload.text,
@@ -70,7 +70,7 @@ async def analyze_image(file: UploadFile = File(...)) -> AnalysisResponse:
         )
 
     try:
-        res = analysis_service.analyze_image(image_bytes)
+        res = await analysis_service.analyze_image(image_bytes)
         if res.success and res.risk_score is not None:
             record_scan(
                 message=res.extracted_text or "Screenshot OCR Analysis",

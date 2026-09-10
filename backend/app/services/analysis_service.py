@@ -88,10 +88,10 @@ class AnalysisService:
     # Public entry points
     # ------------------------------------------------------------------
 
-    def analyze_text(self, text: str) -> AnalysisResponse:
-        return self._run_pipeline(text, input_type="text")
+    async def analyze_text(self, text: str) -> AnalysisResponse:
+        return await self._run_pipeline(text, input_type="text")
 
-    def analyze_image(self, image_bytes: bytes) -> AnalysisResponse:
+    async def analyze_image(self, image_bytes: bytes) -> AnalysisResponse:
         try:
             extracted_text = self.ocr_service.extract_text(image_bytes)
         except OCRError as exc:
@@ -104,7 +104,7 @@ class AnalysisService:
                 error=str(exc),
             )
 
-        response = self._run_pipeline(extracted_text, input_type="image")
+        response = await self._run_pipeline(extracted_text, input_type="image")
         response.extracted_text = extracted_text
         return response
 
@@ -112,7 +112,7 @@ class AnalysisService:
     # Core pipeline
     # ------------------------------------------------------------------
 
-    def _run_pipeline(self, text: str, input_type: str) -> AnalysisResponse:
+    async def _run_pipeline(self, text: str, input_type: str) -> AnalysisResponse:
         # Layer C — technical signals (always runs, always supporting only)
         tech_signals = extract_technical_signals(text)
         tech_raw = technical_score(tech_signals)
@@ -129,7 +129,7 @@ class AnalysisService:
         groq_error: Optional[str] = None
 
         try:
-            groq_payload = self.groq_service.analyze(text)
+            groq_payload = await self.groq_service.analyze(text)
         except GroqServiceError as exc:
             groq_error = str(exc)
             logger.info("Groq unavailable for this request: %s", exc)

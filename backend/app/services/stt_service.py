@@ -5,7 +5,7 @@ import struct
 import math
 import re
 import logging
-from groq import Groq
+from groq import AsyncGroq
 
 logger = logging.getLogger("satrk.stt")
 
@@ -90,11 +90,12 @@ def filter_hallucinations(text: str) -> str:
 
 class STTService:
     def __init__(self, api_key: str = None):
-        self.client = Groq(api_key=api_key or os.environ.get("GROQ_API_KEY"))
+        self.client = AsyncGroq(api_key=api_key or os.environ.get("GROQ_API_KEY"))
 
     async def transcribe_audio(self, audio_bytes: bytes, filename: str = "audio.webm") -> str:
         """
-        Transcribes audio bytes to text via Groq Whisper API (temperature=0.0).
+        Transcribes/translates audio bytes to English text via Groq Whisper API (translations endpoint, temperature=0.0).
+        Supports Indian languages (Hindi, Marathi, Gujarati, etc.) directly into English.
         Includes energy pre-filtering and repetition loop post-filtering.
         """
         if not audio_bytes or len(audio_bytes) < 100:
@@ -125,7 +126,7 @@ class STTService:
                 target_bytes = create_wav_bytes(audio_bytes, sample_rate=16000, num_channels=1, sample_width=2)
 
             file_tuple = (target_filename, target_bytes)
-            response = self.client.audio.transcriptions.create(
+            response = await self.client.audio.translations.create(
                 file=file_tuple,
                 model="whisper-large-v3",
                 temperature=0.0,

@@ -1,3 +1,4 @@
+import asyncio
 import logging
 from typing import Dict, Any, List, Optional
 from app.services.stt_service import STTService
@@ -8,6 +9,7 @@ from app.services.voice_authenticity_service import VoiceAuthenticityService
 logger = logging.getLogger("satrk.call_monitoring")
 
 THREAT_THRESHOLD = 50.0  # Risk score threshold for critical alert
+MAX_AI_TIMEOUT = 3.5     # Strict 3.5s timeout for Groq LLM & Voice Auth calls
 
 
 class CallMonitoringService:
@@ -26,12 +28,12 @@ class CallMonitoringService:
 
     async def process_audio_chunk(self, call_id: str, audio_bytes: bytes) -> Dict[str, Any]:
         """
-        Processes audio chunk through STT -> Rule Engine -> Groq LLM pipeline -> Voice Authenticity.
+        Processes audio chunk through STT -> Rule Engine -> Groq LLM & Voice Authenticity (Concurrent asyncio execution).
         Generates percentage risk score, definitive verdict (SAFE/WARNING/SCAM),
-        AI Threat Explanation breakdown, and deepfake voice detection.
+        AI Threat Explanation breakdown, and deepfake voice detection with low-latency 3.5s timeouts.
         """
         try:
-            # Step 1: Transcribe audio chunk (Whisper temperature=0.0 + noise filter)
+            # Step 1: Transcribe/Translate audio chunk asynchronously (Whisper translations endpoint, temperature=0.0)
             chunk_text = await self.stt_service.transcribe_audio(audio_bytes)
             
             existing_transcript = self.call_transcripts.get(call_id, "")
@@ -49,13 +51,16 @@ class CallMonitoringService:
                 voice_auth_res = {"is_likely_cloned": None, "confidence": None}
                 if current_score >= THREAT_THRESHOLD and self.voice_auth_service:
                     try:
-                        voice_auth_res = await self.voice_auth_service.check_authenticity(audio_bytes)
+                        voice_auth_res = await asyncio.wait_for(
+                            self.voice_auth_service.check_authenticity(audio_bytes),
+                            timeout=MAX_AI_TIMEOUT
+                        )
                         if voice_auth_res.get("is_likely_cloned") is True:
                             current_score = min(100.0, current_score + 10.0)
                             if "possible_voice_clone" not in hits:
                                 hits.append("possible_voice_clone")
                     except Exception as e:
-                        logger.warning(f"Voice authenticity check failed for call {call_id}: {e}")
+                        logger.warning(f"Voice authenticity check timeout/skipped for call {call_id}: {e}")
 
                 return {
                     "call_id": call_id,
@@ -75,41 +80,75 @@ class CallMonitoringService:
             updated_transcript = f"{existing_transcript} {chunk_text}".strip()
             self.call_transcripts[call_id] = updated_transcript
 
-            # Step 3: Run Rule Engine Analysis
+            # Step 3: Run Rule Engine Analysis (Immediate CPU execution)
             rule_result = self.rule_engine.analyze(updated_transcript)
             current_score = rule_result.score
             hits = [h.category for h in rule_result.hits]
 
-            # Step 4: Run Groq LLM Scam Analysis Engine
-            llm_analysis = None
+            # Step 4 & 5: Concurrent Async LLM & Voice Authenticity Execution
+            should_run_llm = (current_score > 0 or len(updated_transcript) >= 15) and self.groq_service.client_ready
+            should_run_voice_auth = (current_score >= THREAT_THRESHOLD) and (self.voice_auth_service is not None)
+
+            llm_coro = None
+            if should_run_llm:
+                llm_coro = asyncio.wait_for(self.groq_service.analyze(updated_transcript), timeout=MAX_AI_TIMEOUT)
+
+            voice_auth_coro = None
+            if should_run_voice_auth:
+                voice_auth_coro = asyncio.wait_for(self.voice_auth_service.check_authenticity(audio_bytes), timeout=MAX_AI_TIMEOUT)
+
+            # Schedule tasks concurrently with asyncio.gather
+            llm_result = None
+            voice_auth_res = {"is_likely_cloned": None, "confidence": None}
+
+            if llm_coro and voice_auth_coro:
+                results = await asyncio.gather(llm_coro, voice_auth_coro, return_exceptions=True)
+                llm_res, voice_res = results[0], results[1]
+                if not isinstance(llm_res, Exception):
+                    llm_result = llm_res
+                else:
+                    logger.warning(f"Groq LLM analysis error/timeout for call {call_id}: {llm_res}")
+
+                if not isinstance(voice_res, Exception) and isinstance(voice_res, dict):
+                    voice_auth_res = voice_res
+                else:
+                    logger.warning(f"Voice auth check error/timeout for call {call_id}: {voice_res}")
+
+            elif llm_coro:
+                try:
+                    llm_result = await llm_coro
+                except Exception as e:
+                    logger.warning(f"Groq LLM analysis error/timeout for call {call_id}: {e}")
+
+            elif voice_auth_coro:
+                try:
+                    voice_auth_res = await voice_auth_coro
+                except Exception as e:
+                    logger.warning(f"Voice auth check error/timeout for call {call_id}: {e}")
+
+            # Process LLM Results
             explanation = ""
             scam_category = "None detected"
             detected_signals = []
             verdict = "SAFE"
 
-            if (current_score > 0 or len(updated_transcript) >= 15) and self.groq_service.client_ready:
-                try:
-                    llm_analysis = self.groq_service.analyze(updated_transcript)
-                    current_score = max(current_score, float(llm_analysis.risk_score))
-                    verdict = getattr(llm_analysis, 'verdict', None) or ("SCAM" if current_score >= 50 else ("WARNING" if current_score >= 30 else "SAFE"))
-                    explanation = llm_analysis.explanation
-                    scam_category = llm_analysis.scam_category
-                    detected_signals = [
-                        {
-                            "signal": s.signal,
-                            "severity": s.severity,
-                            "evidence": s.evidence
-                        }
-                        for s in llm_analysis.detected_signals
-                    ]
-                except Exception as e:
-                    logger.warning(f"Groq LLM analysis fallback for call {call_id}: {e}")
-
-            # Fallback formatting if Groq LLM was unavailable
-            if not llm_analysis:
+            if llm_result:
+                current_score = max(current_score, float(llm_result.risk_score))
+                verdict = getattr(llm_result, 'verdict', None) or ("SCAM" if current_score >= 50 else ("WARNING" if current_score >= 30 else "SAFE"))
+                explanation = llm_result.explanation
+                scam_category = llm_result.scam_category
+                detected_signals = [
+                    {
+                        "signal": s.signal,
+                        "severity": s.severity,
+                        "evidence": s.evidence
+                    }
+                    for s in llm_result.detected_signals
+                ]
+            else:
                 verdict = "SCAM" if current_score >= 50 else ("WARNING" if current_score >= 30 else "SAFE")
                 if hits:
-                    explanation = f"Detected high-risk threat indicators: {', '.join(hits)}. Coercion or authority impersonation language matched."
+                    explanation = f"Detected threat indicators: {', '.join(hits)}. Coercion or authority impersonation language matched."
                     scam_category = hits[0]
                     detected_signals = [
                         {
@@ -124,17 +163,11 @@ class CallMonitoringService:
                     scam_category = "Benign Conversation"
                     detected_signals = []
 
-            # Step 5: Voice Authenticity Check (Deepfake Detection) for high-risk calls
-            voice_auth_res = {"is_likely_cloned": None, "confidence": None}
-            if current_score >= THREAT_THRESHOLD and self.voice_auth_service:
-                try:
-                    voice_auth_res = await self.voice_auth_service.check_authenticity(audio_bytes)
-                    if voice_auth_res.get("is_likely_cloned") is True:
-                        current_score = min(100.0, current_score + 10.0)
-                        if "possible_voice_clone" not in hits:
-                            hits.append("possible_voice_clone")
-                except Exception as e:
-                    logger.warning(f"Voice authenticity check failed for call {call_id}: {e}")
+            # Adjust score if deepfake voice detected
+            if voice_auth_res.get("is_likely_cloned") is True:
+                current_score = min(100.0, current_score + 10.0)
+                if "possible_voice_clone" not in hits:
+                    hits.append("possible_voice_clone")
 
             is_alert = current_score >= THREAT_THRESHOLD or verdict == "SCAM"
 
