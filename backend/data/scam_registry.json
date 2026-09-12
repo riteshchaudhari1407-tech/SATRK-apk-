@@ -1,0 +1,9 @@
+{
+  "test@ybl": {
+    "type": "upi",
+    "reports_count": 1,
+    "notes": [
+      "Test note"
+    ]
+  }
+}

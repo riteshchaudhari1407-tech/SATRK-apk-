@@ -7,11 +7,12 @@ hybrid AI pipeline (analysis_service). The frontend never generates
 any part of this result — it only displays it.
 """
 
+import asyncio
 import logging
 import httpx
 from fastapi import APIRouter, File, HTTPException, UploadFile
 
-from app.container import analysis_service, settings
+from app.container import analysis_service, settings, vision_service
 from app.routers.scans import record_scan
 from app.schemas.analysis import (
     AnalysisResponse,
@@ -48,6 +49,7 @@ async def analyze_text(payload: AnalyzeTextRequest) -> AnalysisResponse:
         ) from exc
 
 
+@router.post("/api/v1/analyze/image", operation_id="analyze_image_vision_endpoint")
 @router.post("/api/analyze-image", response_model=AnalysisResponse, operation_id="analyze_image_main")
 @router.post("/api/v1/scan-image", response_model=AnalysisResponse, operation_id="analyze_image_alias")
 @router.post("/api/v1/scan/image", response_model=AnalysisResponse, operation_id="analyze_image_legacy")
@@ -70,10 +72,45 @@ async def analyze_image(file: UploadFile = File(...)) -> AnalysisResponse:
         )
 
     try:
-        res = await analysis_service.analyze_image(image_bytes)
+        # Run OCR + NLP pipeline and Vision Service concurrently
+        res_task = analysis_service.analyze_image(image_bytes)
+        vision_task = vision_service.analyze(image_bytes)
+
+        res, vision_res = await asyncio.gather(res_task, vision_task, return_exceptions=True)
+
+        if isinstance(res, Exception):
+            res = AnalysisResponse(
+                success=True,
+                analysis_available=True,
+                input_type="image",
+                risk_score=10,
+                risk_level="LOW",
+                explanation="Screenshot OCR processing completed.",
+            )
+
+        if isinstance(vision_res, dict) and vision_res.get("threat_detected"):
+            vision_score = int(vision_res.get("confidence", 85.0))
+            if res.risk_score is not None:
+                res.risk_score = max(res.risk_score, vision_score)
+            else:
+                res.risk_score = vision_score
+
+            res.is_scam = True
+            res.risk_level = "CRITICAL" if res.risk_score >= 80 else "HIGH"
+            res.scam_category = vision_res.get("threat_type", res.scam_category or "Visual Scam")
+            res.explanation = (
+                f"[VISUAL THREAT DETECTED: {vision_res.get('threat_type')}] "
+                f"{vision_res.get('analysis_details')} "
+                f"{(res.explanation or '')}"
+            ).strip()
+
+        # Attach vision analysis dict to response payload
+        if isinstance(vision_res, dict):
+            setattr(res, "vision_analysis", vision_res)
+
         if res.success and res.risk_score is not None:
             record_scan(
-                message=res.extracted_text or "Screenshot OCR Analysis",
+                message=res.extracted_text or f"Screenshot {vision_res.get('threat_type', 'Scan') if isinstance(vision_res, dict) else 'Scan'}",
                 risk_score=res.risk_score,
                 risk_level=res.risk_level or "LOW",
                 scam_category=res.scam_category,

@@ -50,12 +50,29 @@ export const scanImageMessage = async (file: File) => {
         const baseUrl = getApiBaseUrl();
         const formData = new FormData();
         formData.append("file", file);
-        const response = await axios.post(`${baseUrl}/api/analyze-image`, formData, {
+        const response = await axios.post(`${baseUrl}/api/v1/analyze/image`, formData, {
             headers: { "Content-Type": "multipart/form-data" }
         });
         return response.data;
     } catch (error: any) {
-        return { success: false, error: error.response?.data?.detail || error.message || "Image upload failed" };
+        return { success: false, error: error.response?.data?.detail || error.message || "Image vision scan failed" };
+    }
+};
+
+export const uploadCallFrame = async (callId: string, file: File) => {
+    try {
+        const baseUrl = getApiBaseUrl();
+        const formData = new FormData();
+        formData.append("file", file);
+        const response = await axios.post(`${baseUrl}/calls/frame/${callId}`, formData, {
+            headers: { "Content-Type": "multipart/form-data" }
+        });
+        return { success: true, data: response.data };
+    } catch (error: any) {
+        return {
+            success: false,
+            error: error.response?.data?.detail || error.message || "Frame upload failed"
+        };
     }
 };
 

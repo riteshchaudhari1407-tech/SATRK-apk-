@@ -127,6 +127,16 @@ To keep the WebSocket processing cycle below the live audio streaming chunk inte
 - Provides human-in-the-loop feedback actions (`Yes / No` correct alert buttons on high-risk alerts).
 - Logs feedback payloads to fine-tune rule weights and prompt calibrations over time.
 
+### 7. Financial Pattern Detection (`backend/app/services/financial_scanner.py`)
+- Employs context-aware disambiguation to differentiate 9-18 digit bank accounts from standard mobile numbers.
+- Identifies critical Indian financial data: IFSC, strict NPCI UPI IDs, PAN Cards, and sensitive keywords (OTP/CVV).
+- Strictly follows the Zero Fabrication principle by capping risk scores and requiring direct evidence.
+
+### 8. Crowdsourced Scam Registry (`backend/app/services/scam_registry.py`)
+- Provides a local JSON persistence layer (`data/scam_registry.json`) for reporting malicious identifiers.
+- Guarantees data integrity during concurrent requests via atomic writes using Python's `tempfile` and `os.replace`.
+- Integrates dynamically with the scanning pipeline to boost risk scores based on community reports.
+
 ---
 
 ## Tech Stack

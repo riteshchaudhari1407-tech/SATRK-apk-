@@ -31,7 +31,7 @@ hardcoded fixed score):
 """
 
 import logging
-from typing import List, Optional
+from typing import Any, List, Optional
 
 from app.schemas.analysis import (
     AnalysisResponse,
@@ -79,10 +79,15 @@ class AnalysisService:
         groq_service: GroqService,
         semantic_service: SemanticService,
         ocr_service: OCRService,
+        vision_service: Optional[Any] = None,
+        **kwargs,
     ):
         self.groq_service = groq_service
         self.semantic_service = semantic_service
         self.ocr_service = ocr_service
+        self.vision_service = vision_service
+        self.financial_scanner = kwargs.get("financial_scanner")
+        self.scam_registry = kwargs.get("scam_registry")
 
     # ------------------------------------------------------------------
     # Public entry points
@@ -180,7 +185,26 @@ class AnalysisService:
         weight_total += WEIGHT_TECHNICAL
 
         final_score = round(weighted_sum / weight_total, 1) if weight_total else 0.0
-        final_score = max(0.0, min(100.0, final_score))
+
+        # --- Financial Scanner & Scam Registry (Zero Fabrication, purely evidence-based) ---
+        fin_risk = 0
+        scam_risk = 0
+        fin_reasons = []
+        if getattr(self, "financial_scanner", None):
+            fin_result = self.financial_scanner.scan_text(text)
+            if fin_result:
+                fin_risk = fin_result.get("risk_contribution", 0)
+                fin_reasons = fin_result.get("reasons", [])
+                
+                if getattr(self, "scam_registry", None):
+                    for id_obj in fin_result.get("identifiers", []):
+                        reg_check = self.scam_registry.check_identifier(id_obj["value"])
+                        if reg_check["reported"]:
+                            scam_risk = max(scam_risk, reg_check["risk_boost"])
+                            fin_reasons.append(reg_check["reason"])
+                            
+        # Append capped risk boost to final score
+        final_score = max(0.0, min(100.0, final_score + fin_risk + scam_risk))
 
         risk_level = _risk_level_from_score(final_score)
 
@@ -249,6 +273,15 @@ class AnalysisService:
             )
             seen_signal_names.add(tech_sig["signal"])
 
+        for reason in fin_reasons:
+            detected_signals.append(
+                DetectedSignal(
+                    signal="financial_or_scam_registry",
+                    severity="HIGH" if scam_risk > 0 else "MEDIUM",
+                    evidence=reason
+                )
+            )
+
         semantic_signals = [
             SemanticSignal(category=c["category"], similarity=c["similarity"])
             for c in semantic_categories
@@ -267,6 +300,9 @@ class AnalysisService:
             explanation = self._build_fallback_explanation(
                 final_score, risk_level, semantic_categories, tech_signals
             )
+            
+        if fin_reasons:
+            explanation += f" Financial/Registry Indicators: {', '.join(fin_reasons)}."
 
         # --- Recommended actions ---
         if groq_payload is not None:

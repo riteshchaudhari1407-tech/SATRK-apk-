@@ -11,6 +11,14 @@ export interface VoiceAuthenticity {
     confidence?: number | null;
 }
 
+export interface VisionAnalysis {
+    threat_detected?: boolean;
+    confidence?: number;
+    analysis_details?: string;
+    threat_type?: string;
+    detected_visual_elements?: string[];
+}
+
 export interface CallAnalysisResult {
     event?: 'phone_connected' | 'call_analysis' | 'phone_disconnected';
     call_id?: string;
@@ -24,6 +32,7 @@ export interface CallAnalysisResult {
     hits?: string[];
     detected_signals?: DetectedSignal[];
     voice_authenticity?: VoiceAuthenticity;
+    vision_analysis?: VisionAnalysis;
     connected_at?: string;
     phone_status?: 'ACTIVE' | 'DISCONNECTED';
 }
@@ -83,6 +92,14 @@ export class CallSocketService {
             this.socket.send(audioBlob);
         } else {
             console.warn('[CallSocketService] Socket is not open. Unable to send audio chunk.');
+        }
+    }
+
+    sendFrame(base64Frame: string) {
+        if (this.socket && this.socket.readyState === WebSocket.OPEN) {
+            this.socket.send(JSON.stringify({ type: 'frame', frame_base64: base64Frame }));
+        } else {
+            console.warn('[CallSocketService] Socket is not open. Unable to send frame.');
         }
     }
 

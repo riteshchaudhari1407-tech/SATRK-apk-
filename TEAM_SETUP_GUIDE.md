@@ -87,6 +87,7 @@ python -m pip install --upgrade pip
 pip install -r requirements.txt
 
 # Start the FastAPI Uvicorn Server (Accessible to local network devices)
+# Note: A local data directory (`data/`) will be automatically created on first run to store the Crowdsourced Scam Registry (JSON persistence).
 python -m uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 ```
 

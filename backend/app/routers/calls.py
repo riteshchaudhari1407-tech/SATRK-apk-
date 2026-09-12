@@ -98,13 +98,29 @@ async def websocket_call_endpoint(websocket: WebSocket, call_id: str):
 
     try:
         while True:
-            audio_bytes = await websocket.receive_bytes()
-            result = await call_monitoring_service.process_audio_chunk(call_id, audio_bytes)
-            await websocket.send_json(result)
+            message = await websocket.receive()
+            if "bytes" in message and message["bytes"]:
+                audio_bytes = message["bytes"]
+                result = await call_monitoring_service.process_audio_chunk(call_id, audio_bytes)
+                await websocket.send_json(result)
 
-            # ② Broadcast analysis result with event tag
-            broadcast_payload = {**result, "event": "call_analysis"}
-            asyncio.create_task(broadcast_to_frontend(broadcast_payload))
+                # Broadcast analysis result with event tag
+                broadcast_payload = {**result, "event": "call_analysis"}
+                asyncio.create_task(broadcast_to_frontend(broadcast_payload))
+            elif "text" in message and message["text"]:
+                try:
+                    import json
+                    data = json.loads(message["text"])
+                    if "frame_base64" in data or "image" in data:
+                        frame = data.get("frame_base64") or data.get("image")
+                        call_monitoring_service.set_call_frame(call_id, frame)
+                        # Process synthetic chunk with frame
+                        result = await call_monitoring_service.process_audio_chunk(call_id, b"", video_frame=frame)
+                        await websocket.send_json(result)
+                        broadcast_payload = {**result, "event": "call_analysis"}
+                        asyncio.create_task(broadcast_to_frontend(broadcast_payload))
+                except Exception as parse_err:
+                    logger.warning(f"WS text parse warning for call {call_id}: {parse_err}")
 
     except WebSocketDisconnect:
         logger.info(f"Phone WebSocket disconnected — call_id: {call_id}")
@@ -118,6 +134,24 @@ async def websocket_call_endpoint(websocket: WebSocket, call_id: str):
             "call_id": call_id,
             "phone_status": "DISCONNECTED",
         }))
+
+
+# ── frame / screenshot upload endpoint for live calls ──────────────
+@router.post("/frame/{call_id}")
+async def upload_call_frame(call_id: str, file: UploadFile = File(...)):
+    """
+    Accepts a video call frame/screenshot from Android or dashboard,
+    runs Vision Service analysis, caches it for the call_id session,
+    and broadcasts the updated threat analysis to connected frontends.
+    """
+    image_bytes = await file.read()
+    if not image_bytes:
+        raise HTTPException(status_code=400, detail="Empty frame uploaded.")
+
+    result = await call_monitoring_service.process_audio_chunk(call_id, b"", video_frame=image_bytes)
+    broadcast_payload = {**result, "event": "call_analysis"}
+    await broadcast_to_frontend(broadcast_payload)
+    return result
 
 
 # ── audio file upload endpoint ──────────────────────────────────────

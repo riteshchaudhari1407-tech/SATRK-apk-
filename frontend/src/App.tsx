@@ -1295,6 +1295,9 @@ export default function App() {
                     )
                         ? signals
                         : [],
+
+                vision_analysis:
+                    result.vision_analysis || null,
             };
         }, [result]);
 
@@ -2792,11 +2795,10 @@ export default function App() {
                                             )}
 
                                             {linkResult && (
-                                                <div className={`mt-4 rounded-2xl border p-4 text-xs space-y-2 transition-all ${
-                                                    linkResult.is_safe
-                                                        ? 'border-emerald-500/40 bg-emerald-950/20 text-emerald-300'
-                                                        : 'border-red-500/50 bg-red-950/40 text-red-300 shadow-lg shadow-red-500/20'
-                                                }`}>
+                                                <div className={`mt-4 rounded-2xl border p-4 text-xs space-y-2 transition-all ${linkResult.is_safe
+                                                    ? 'border-emerald-500/40 bg-emerald-950/20 text-emerald-300'
+                                                    : 'border-red-500/50 bg-red-950/40 text-red-300 shadow-lg shadow-red-500/20'
+                                                    }`}>
                                                     <div className="flex items-center justify-between">
                                                         <div className="flex items-center gap-2 font-mono font-bold">
                                                             {linkResult.is_safe ? (
@@ -2859,7 +2861,6 @@ export default function App() {
                                             </div>
                                         ) : (
                                             <div>
-
                                                 <div className="flex items-center justify-between">
 
                                                     <div>
@@ -2885,6 +2886,31 @@ export default function App() {
                                                     </div>
 
                                                 </div>
+
+                                                {/* ── VISION ANALYSIS THREAT CARD ── */}
+                                                {scanResult?.vision_analysis && (
+                                                    <div className="mt-4 rounded-2xl border border-emerald-500/30 bg-[#071310] p-4 shadow-lg">
+                                                        <div className="flex items-center justify-between border-b border-[#1d312d] pb-2 mb-2">
+                                                            <div className="flex items-center gap-2 font-mono text-xs font-bold">
+                                                                {scanResult.vision_analysis.threat_detected ? (
+                                                                    <span className="flex items-center gap-1.5 text-red-400 animate-pulse">
+                                                                        🚨 VISUAL THREAT: {scanResult.vision_analysis.threat_type}
+                                                                    </span>
+                                                                ) : (
+                                                                    <span className="flex items-center gap-1.5 text-emerald-400">
+                                                                        🛡️ VISUAL FRAME: SAFE
+                                                                    </span>
+                                                                )}
+                                                            </div>
+                                                            <span className="font-mono text-[10px] text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/30 font-bold">
+                                                                Confidence: {scanResult.vision_analysis.confidence}%
+                                                            </span>
+                                                        </div>
+                                                        <p className="text-xs text-[#c0cfc9] leading-relaxed">
+                                                            {scanResult.vision_analysis.analysis_details}
+                                                        </p>
+                                                    </div>
+                                                )}
 
                                                 {/* SCORE */}
 
@@ -3060,6 +3086,7 @@ export default function App() {
                                                         </p>
 
                                                     </div>
+
                                                 )}
 
                                             </div>

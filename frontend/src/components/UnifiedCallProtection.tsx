@@ -19,8 +19,8 @@ import {
     FiThumbsDown,
 } from 'react-icons/fi';
 import { callSocketService, getWsBaseUrl } from '../services/callSocket';
-import type { CallAnalysisResult, DetectedSignal, VoiceAuthenticity } from '../services/callSocket';
-import { uploadAudioFile, submitFeedback } from '../services/api';
+import type { CallAnalysisResult, DetectedSignal, VoiceAuthenticity, VisionAnalysis } from '../services/callSocket';
+import { uploadAudioFile, submitFeedback, uploadCallFrame } from '../services/api';
 
 type InputMode = 'phone' | 'mic' | 'file';
 
@@ -42,6 +42,7 @@ export const UnifiedCallProtection: React.FC = () => {
     const [selectedFile, setSelectedFile] = useState<File | null>(null);
     const [isUploading, setIsUploading] = useState<boolean>(false);
     const fileInputRef = useRef<HTMLInputElement | null>(null);
+    const frameInputRef = useRef<HTMLInputElement | null>(null);
 
     // ── Shared Analysis Visualization State ──
     const [activeSourceLabel, setActiveSourceLabel] = useState<string>('Android Phone Stream');
@@ -56,6 +57,7 @@ export const UnifiedCallProtection: React.FC = () => {
     const [hits, setHits] = useState<string[]>([]);
     const [detectedSignals, setDetectedSignals] = useState<DetectedSignal[]>([]);
     const [voiceAuthenticity, setVoiceAuthenticity] = useState<VoiceAuthenticity | null>(null);
+    const [visionAnalysis, setVisionAnalysis] = useState<VisionAnalysis | null>(null);
     const [chunkCount, setChunkCount] = useState<number>(0);
     const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
@@ -106,6 +108,7 @@ export const UnifiedCallProtection: React.FC = () => {
                             setHits([]);
                             setDetectedSignals([]);
                             setVoiceAuthenticity(null);
+                            setVisionAnalysis(null);
                             setFeedbackState('idle');
                             setFeedbackChoice(null);
                             setChunkCount(0);
@@ -124,6 +127,7 @@ export const UnifiedCallProtection: React.FC = () => {
                             if (data.hits) setHits(data.hits);
                             if (data.detected_signals) setDetectedSignals(data.detected_signals);
                             if (data.voice_authenticity !== undefined) setVoiceAuthenticity(data.voice_authenticity);
+                            if (data.vision_analysis !== undefined) setVisionAnalysis(data.vision_analysis);
                             setChunkCount((prev) => prev + 1);
                             break;
 
@@ -143,6 +147,7 @@ export const UnifiedCallProtection: React.FC = () => {
                             if (data.hits) setHits(data.hits);
                             if (data.detected_signals) setDetectedSignals(data.detected_signals);
                             if (data.voice_authenticity !== undefined) setVoiceAuthenticity(data.voice_authenticity);
+                            if (data.vision_analysis !== undefined) setVisionAnalysis(data.vision_analysis);
                             break;
                     }
                 } catch (err) {
@@ -336,12 +341,43 @@ export const UnifiedCallProtection: React.FC = () => {
         setHits([]);
         setDetectedSignals([]);
         setVoiceAuthenticity(null);
+        setVisionAnalysis(null);
         setFeedbackState('idle');
         setFeedbackChoice(null);
         setChunkCount(0);
         setCallId('');
         setSelectedFile(null);
         setErrorMsg(null);
+    };
+
+    // ── 3b. Live Call Frame / Screenshot Simulation Handler ──
+    const handleFrameSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+
+        try {
+            setErrorMsg(null);
+            const activeCallId = callId || `call_sim_${Date.now()}`;
+            if (!callId) setCallId(activeCallId);
+
+            const res = await uploadCallFrame(activeCallId, file);
+            if (res.success && res.data) {
+                const data = res.data;
+                if (data.transcript !== undefined && data.transcript) setTranscript(data.transcript);
+                if (typeof data.risk_score === 'number') setRiskScore(data.risk_score);
+                if (data.verdict) setVerdict(data.verdict);
+                if (typeof data.alert === 'boolean') setIsAlert(data.alert);
+                if (data.explanation) setExplanation(data.explanation);
+                if (data.scam_category) setScamCategory(data.scam_category);
+                if (data.hits) setHits(data.hits);
+                if (data.detected_signals) setDetectedSignals(data.detected_signals);
+                if (data.vision_analysis) setVisionAnalysis(data.vision_analysis);
+            } else {
+                setErrorMsg(res.error || "Frame analysis failed");
+            }
+        } catch (err: any) {
+            setErrorMsg(err.message || "Failed to process frame");
+        }
     };
 
     // ── 4. Feedback Handler ──
@@ -668,6 +704,16 @@ export const UnifiedCallProtection: React.FC = () => {
                                         DEEPFAKE / VOICE CLONE DETECTED
                                     </span>
                                 )}
+                                {visionAnalysis?.threat_detected === true && (
+                                    <span className="flex items-center gap-1.5 rounded-lg bg-red-600/95 border border-amber-400 px-3 py-0.5 font-mono text-[10px] font-black text-white uppercase shadow-lg shadow-red-600/60 animate-pulse">
+                                        <FiAlertTriangle className="text-amber-300 animate-bounce text-xs" />
+                                        {visionAnalysis.threat_type === 'SCREEN_SHARE_APP'
+                                            ? 'MALICIOUS SCREEN-SHARE DETECTED'
+                                            : visionAnalysis.threat_type === 'FAKE_POLICE_BACKGROUND'
+                                            ? 'FAKE VIDEO BACKGROUND DETECTED'
+                                            : `VISUAL SCAM DETECTED: ${visionAnalysis.threat_type}`}
+                                    </span>
+                                )}
                             </div>
                             <h3 className="text-xl font-black text-white tracking-tight mt-0.5">
                                 {currentVerdict.label}
@@ -676,6 +722,23 @@ export const UnifiedCallProtection: React.FC = () => {
                     </div>
 
                     <div className="flex items-center gap-3">
+                        {/* SIMULATE SCREEN FRAME TRIGGER BUTTON FOR JUDGE DEMO */}
+                        <input
+                            type="file"
+                            ref={frameInputRef}
+                            onChange={handleFrameSelect}
+                            accept="image/*"
+                            className="hidden"
+                        />
+                        <button
+                            onClick={() => frameInputRef.current?.click()}
+                            title="Upload live video frame screenshot to simulate automated background detection"
+                            className="flex items-center gap-2 rounded-xl bg-[#1d312d] hover:bg-[#26413c] px-3 py-2 font-mono text-[11px] font-bold text-emerald-400 border border-emerald-500/30 transition shadow"
+                        >
+                            <FiUploadCloud className="text-sm text-emerald-400" />
+                            <span>Simulate Video Frame</span>
+                        </button>
+
                         <div className="text-right hidden sm:block">
                             <p className="text-[10px] font-mono text-[#82938e] uppercase">Threat Score</p>
                             <p className="text-xl font-black font-mono text-emerald-400">{Math.round(riskScore)}%</p>
@@ -897,6 +960,19 @@ export const UnifiedCallProtection: React.FC = () => {
                                 <div className="mt-4 flex items-center justify-center gap-2 rounded-xl bg-red-600/20 border border-red-500/50 px-3 py-2 text-xs font-black font-mono text-red-400 shadow-md shadow-red-500/20 animate-pulse">
                                     <FiAlertTriangle className="text-amber-400 animate-bounce text-sm shrink-0" />
                                     <span>DEEPFAKE / VOICE CLONE DETECTED</span>
+                                </div>
+                            )}
+
+                            {/* VISUAL THREAT DETECTED BADGE */}
+                            {visionAnalysis?.threat_detected === true && (
+                                <div className="mt-3 flex flex-col gap-1 text-left rounded-xl bg-red-600/20 border border-red-500/50 p-3 text-xs font-mono text-red-300 shadow-md shadow-red-500/20">
+                                    <div className="flex items-center gap-2 font-bold text-red-400">
+                                        <FiAlertTriangle className="text-amber-400 animate-bounce text-sm shrink-0" />
+                                        <span>VISUAL SCAM DETECTED</span>
+                                    </div>
+                                    <p className="text-[11px] text-[#c0cfc9] leading-tight mt-1">
+                                        {visionAnalysis.analysis_details}
+                                    </p>
                                 </div>
                             )}
                         </div>
